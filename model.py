@@ -28,7 +28,7 @@ class DiffusionConfig:
     n_layer: int = 6
     n_head: int = 8
     n_embd: int = 256
-    max_timesteps: int = 1000  # number of diffusion steps
+    max_timesteps: int = 16  # number of diffusion steps
 
 
 def norm(x):

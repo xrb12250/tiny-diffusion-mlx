@@ -121,7 +121,7 @@ def train(
     noise_schedule,
     optimizer,
     num_steps=10000,
-    sample_interval=1000,
+    sample_interval=500,
     patience=500,
 ):
     """
@@ -163,7 +163,7 @@ def train(
                 samples = model.sample(
                     batch_size=1,
                     seq_len=100,
-                    num_steps=100,  # Use fewer steps for faster sampling
+                    num_steps=None,  # Use all timesteps
                     temperature=1.0,
                     device=model.get_device(),
                 )
@@ -183,7 +183,7 @@ def main():
         n_layer=6,
         n_head=8,
         n_embd=256,
-        max_timesteps=1000,
+        max_timesteps=16,  # Number of diffusion steps
     )
 
     # Device
@@ -221,8 +221,8 @@ def main():
         noise_schedule=noise_schedule,
         optimizer=optimizer,
         num_steps=10000,
-        sample_interval=1000,
-        patience=500,
+        sample_interval=500,
+        patience=10000,  # No stopping early
     )
 
     # Save model

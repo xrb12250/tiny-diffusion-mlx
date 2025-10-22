@@ -15,7 +15,7 @@ def load_model(checkpoint_path, device):
         n_layer=6,
         n_head=8,
         n_embd=256,
-        max_timesteps=1000,
+        max_timesteps=16,
     )
 
     model = DiffusionTransformer(config).to(device)
@@ -25,7 +25,7 @@ def load_model(checkpoint_path, device):
     return model
 
 
-def generate_samples(model, num_samples=5, seq_len=256, num_steps=100, temperature=1.0):
+def generate_samples(model, num_samples=5, seq_len=256, num_steps=16, temperature=1.0):
     """Generate text samples from the model"""
     device = model.get_device()
 
@@ -66,7 +66,7 @@ def main():
         model,
         num_samples=5,
         seq_len=256,
-        num_steps=100,  # More steps = better quality but slower
+        num_steps=16,  # Use all diffusion steps
         temperature=1.0  # Higher = more random, lower = more deterministic
     )
 
