@@ -34,10 +34,12 @@ def apply_game_of_life_rules(grid):
     """
     Apply Conway's Game of Life rules to a binary grid
     Args:
-        grid: Binary tensor of shape (16, 16)
+        grid: Binary tensor of shape (H, W)
     Returns:
         next_grid: Next state according to Game of Life rules
     """
+    H, W = grid.shape
+
     # Pad the grid to handle edges
     padded = F.pad(grid.float(), (1, 1, 1, 1), mode='constant', value=0)
 
@@ -47,7 +49,7 @@ def apply_game_of_life_rules(grid):
         for j in range(-1, 2):
             if i == 0 and j == 0:
                 continue
-            neighbors += padded[1+i:17+i, 1+j:17+j]
+            neighbors += padded[1+i:H+1+i, 1+j:W+1+j]
 
     # Apply Game of Life rules:
     # 1. Any live cell with 2-3 neighbors survives
@@ -87,75 +89,144 @@ def display_grid(grid, tokens, mask=None):
     print("=" * 18)
 
 
+def load_initial_text(data_path, num_chars=1024):
+    """Load initial text from data file"""
+    with open(data_path, 'r', encoding='utf-8') as f:
+        text = f.read()[:num_chars]
+
+    # Pad if necessary
+    if len(text) < num_chars:
+        text = text + ' ' * (num_chars - len(text))
+
+    # Convert to tokens
+    tokens = torch.tensor([min(ord(c), 127) for c in text], dtype=torch.long)
+    return tokens
+
+
 def generate_with_game_of_life(
-    model, num_iterations=10, seq_len=256, num_steps=32, temperature=1.0
+    model, initial_tokens, num_iterations=10, seq_len=256, num_steps=32, temperature=1.0
 ):
     """
     Generate samples using Game of Life rules to determine masking
     Uses matplotlib animation for live visualization
+    Works on 32x32 grid (1024 tokens) by processing in 256-token chunks
 
     Args:
         model: The trained diffusion model
+        initial_tokens: Initial 1024 tokens (32x32 grid)
         num_iterations: Number of Game of Life iterations to run
-        seq_len: Sequence length (must be 256 for 16x16 grid)
+        seq_len: Sequence length for model (256)
         num_steps: Number of diffusion denoising steps
         temperature: Sampling temperature
     """
-    assert seq_len == 256, "seq_len must be 256 for 16x16 grid"
+    assert len(initial_tokens) == 1024, "initial_tokens must be 1024 for 32x32 grid"
 
     device = model.get_device()
+    tokens = initial_tokens.to(device)
 
-    print(f"Generating with Game of Life dynamics for {num_iterations} iterations\n")
+    print(f"Pre-calculating {num_iterations} iterations with Game of Life dynamics...")
 
-    # Initial generation: create first sample from scratch
-    with torch.no_grad():
-        tokens = model.sample(
-            batch_size=1,
-            seq_len=seq_len,
-            num_steps=num_steps,
-            temperature=temperature,
-            device=device,
-        )[0]  # Shape: (256,)
+    # Convert to 32x32 grid
+    grid = (tokens % 2).reshape(32, 32)
 
-    # Convert to grid
-    grid = tokens_to_grid(tokens)
+    # Pre-calculate all frames
+    all_frames = []
+    all_masks = []
+
+    # Store initial state
+    all_frames.append(tokens.clone())
+    all_masks.append((grid == 1).flatten())
+
+    # Calculate all iterations
+    for iteration in range(num_iterations):
+        print(f"Calculating iteration {iteration + 1}/{num_iterations}...")
+
+        # Apply Game of Life rules to get next state (on 32x32 grid)
+        next_grid = apply_game_of_life_rules(grid)
+
+        # Create mask: alive cells will be resampled
+        mask = (next_grid == 1).flatten()  # Shape: (1024,)
+
+        # Process all 1024 tokens in chunks of 256
+        updated_tokens = tokens.clone()
+
+        # Split into 4 chunks of 256 tokens each
+        num_chunks = 1024 // seq_len
+        for chunk_idx in range(num_chunks):
+            start_idx = chunk_idx * seq_len
+            end_idx = start_idx + seq_len
+
+            # Get chunk mask
+            chunk_mask = mask[start_idx:end_idx]
+
+            # Only process if there are masked positions in this chunk
+            if chunk_mask.any():
+                # Get chunk tokens
+                x = updated_tokens[start_idx:end_idx].clone().unsqueeze(0)  # Shape: (1, 256)
+
+                # Denoise, but only update masked positions (alive cells)
+                with torch.no_grad():
+                    for t in reversed(range(num_steps)):
+                        t_batch = torch.full((1,), t, device=device, dtype=torch.long)
+                        logits = model.forward(x, t_batch)
+
+                        if t > 0:
+                            # Sample from predicted distribution
+                            probs = F.softmax(logits / temperature, dim=-1)
+                            x_new = torch.multinomial(
+                                probs.view(-1, model.config.vocab_size), num_samples=1
+                            ).view(1, seq_len)
+
+                            # Only update masked positions (alive cells)
+                            x[0, chunk_mask] = x_new[0, chunk_mask]
+                        else:
+                            # Final step: take argmax
+                            x_new = torch.argmax(logits, dim=-1)
+                            x[0, chunk_mask] = x_new[0, chunk_mask]
+
+                # Update the chunk in the full token array
+                updated_tokens[start_idx:end_idx] = x[0]
+
+        # Update state
+        tokens = updated_tokens
+        grid = next_grid
+
+        # Store frame
+        all_frames.append(tokens.clone().cpu())
+        all_masks.append(mask.cpu())
+
+    print(f"Done! Now showing animation...\n")
 
     # Setup matplotlib
-    fig, ax = plt.subplots(figsize=(8, 9))
+    fig, ax = plt.subplots(figsize=(10, 10))
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis('off')
 
-    # Create a SINGLE text object for all 16 rows (centered)
+    # Create a SINGLE text object for all 32 rows (centered)
     # This ensures zero gap between lines
     text_obj = ax.text(0.5, 0.5, '', ha='center', va='center',
-                     fontsize=14, family='monospace',
+                     fontsize=10, family='monospace',
                      fontweight='normal', linespacing=1.0)
 
-    title = fig.suptitle('Initial state - Masked cells: 0/256', fontsize=14)
-
-    # State variables for animation
-    state = {
-        'tokens': tokens,
-        'grid': grid,
-        'iteration': 0
-    }
+    title = fig.suptitle('Initial state - Masked cells: 0/1024', fontsize=14)
 
     def init():
         """Initialize animation"""
         # Show initial state
-        mask = (state['grid'] == 1).flatten()
+        frame_tokens = all_frames[0]
+        mask = all_masks[0]
 
-        # Build all rows as a single multi-line string
+        # Build all rows as a single multi-line string (32x32 grid)
         lines = []
-        for row_idx in range(16):
+        for row_idx in range(32):
             row_text = ""
-            for col_idx in range(16):
-                idx = row_idx * 16 + col_idx
+            for col_idx in range(32):
+                idx = row_idx * 32 + col_idx
                 if mask[idx]:
                     row_text += '█'
                 else:
-                    char = chr(min(int(state['tokens'][idx]), 127))
+                    char = chr(min(int(frame_tokens[idx]), 127))
                     if char == '\n':
                         char = ' '
                     row_text += char
@@ -164,58 +235,27 @@ def generate_with_game_of_life(
         text_obj.set_text('\n'.join(lines))
         text_obj.set_color('black')
 
-        title.set_text(f'Initial state - Masked cells: {mask.sum().item()}/256')
+        title.set_text(f'Initial state - Masked cells: {mask.sum().item()}/1024')
         return [text_obj, title]
 
-    def update(frame):
-        """Update function for animation"""
-        if state['iteration'] >= num_iterations:
+    def update(frame_idx):
+        """Update function for animation - just display pre-calculated frame"""
+        if frame_idx >= len(all_frames):
             return [text_obj, title]
 
-        # Apply Game of Life rules to get next state
-        next_grid = apply_game_of_life_rules(state['grid'])
+        frame_tokens = all_frames[frame_idx]
+        mask = all_masks[frame_idx]
 
-        # Create mask: alive cells will be resampled
-        mask = (next_grid == 1).flatten()  # Shape: (256,)
-
-        # Start from current tokens
-        x = state['tokens'].clone().unsqueeze(0)  # Shape: (1, 256)
-
-        # Denoise, but only update masked positions (alive cells)
-        with torch.no_grad():
-            for t in reversed(range(num_steps)):
-                t_batch = torch.full((1,), t, device=device, dtype=torch.long)
-                logits = model.forward(x, t_batch)
-
-                if t > 0:
-                    # Sample from predicted distribution
-                    probs = F.softmax(logits / temperature, dim=-1)
-                    x_new = torch.multinomial(
-                        probs.view(-1, model.config.vocab_size), num_samples=1
-                    ).view(1, seq_len)
-
-                    # Only update masked positions (alive cells)
-                    x[0, mask] = x_new[0, mask]
-                else:
-                    # Final step: take argmax
-                    x_new = torch.argmax(logits, dim=-1)
-                    x[0, mask] = x_new[0, mask]
-
-        # Update state
-        state['tokens'] = x[0]
-        state['grid'] = next_grid
-        state['iteration'] += 1
-
-        # Update display - build all rows as a single multi-line string
+        # Update display - build all rows as a single multi-line string (32x32 grid)
         lines = []
-        for row_idx in range(16):
+        for row_idx in range(32):
             row_text = ""
-            for col_idx in range(16):
-                idx = row_idx * 16 + col_idx
+            for col_idx in range(32):
+                idx = row_idx * 32 + col_idx
                 if mask[idx]:
                     row_text += '█'
                 else:
-                    char = chr(min(int(state['tokens'][idx]), 127))
+                    char = chr(min(int(frame_tokens[idx]), 127))
                     if char == '\n':
                         char = ' '
                     row_text += char
@@ -224,18 +264,18 @@ def generate_with_game_of_life(
         text_obj.set_text('\n'.join(lines))
         text_obj.set_color('black')
 
-        title.set_text(f'Iteration {state["iteration"]} - Masked cells: {mask.sum().item()}/256')
+        title.set_text(f'Iteration {frame_idx} - Masked cells: {mask.sum().item()}/1024')
 
         return [text_obj, title]
 
     # Create animation (faster, with looping)
-    anim = FuncAnimation(fig, update, init_func=init, frames=num_iterations,
+    anim = FuncAnimation(fig, update, init_func=init, frames=len(all_frames),
                         interval=50, blit=False, repeat=True)
 
     plt.tight_layout()
     plt.show()
 
-    return state['tokens']
+    return all_frames[-1]
 
 
 def main():
@@ -254,10 +294,16 @@ def main():
     model = load_model(checkpoint_path, device)
     print("Model loaded!\n")
 
+    # Load initial text (first 1024 characters from data.txt)
+    print("Loading initial text from data.txt...")
+    initial_tokens = load_initial_text("data.txt", num_chars=1024)
+    print(f"Loaded {len(initial_tokens)} characters\n")
+
     # Generate with Game of Life dynamics
     generate_with_game_of_life(
         model,
-        num_iterations=200,
+        initial_tokens,
+        num_iterations=100,
         seq_len=256,
         num_steps=32,
         temperature=1.0,
