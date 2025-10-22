@@ -40,8 +40,9 @@ def apply_game_of_life_rules(grid):
     """
     H, W = grid.shape
 
-    # Pad the grid to handle edges
-    padded = F.pad(grid.float(), (1, 1, 1, 1), mode='constant', value=0)
+    # Pad the grid to handle edges (circular for wrapping/toroidal topology)
+    # Need to add batch dimension for circular padding to work
+    padded = F.pad(grid.float().unsqueeze(0), (1, 1, 1, 1), mode="circular").squeeze(0)
 
     # Count neighbors for each cell
     neighbors = torch.zeros_like(grid, dtype=torch.float32)
@@ -49,7 +50,7 @@ def apply_game_of_life_rules(grid):
         for j in range(-1, 2):
             if i == 0 and j == 0:
                 continue
-            neighbors += padded[1+i:H+1+i, 1+j:W+1+j]
+            neighbors += padded[1 + i : H + 1 + i, 1 + j : W + 1 + j]
 
     # Apply Game of Life rules:
     # 1. Any live cell with 2-3 neighbors survives
@@ -76,14 +77,14 @@ def display_grid(grid, tokens, mask=None):
         row = ""
         for j in range(16):
             idx = i * 16 + j
-            # Show █ for masked positions (alive cells)
+            # Show ⬛ for masked positions (alive cells)
             if mask is not None and mask[idx]:
-                row += "█"
+                row += "⬛"
             else:
                 char = chr(min(int(tokens[idx]), 127))
                 # Replace newline with space
-                if char == '\n':
-                    char = ' '
+                if char == "\n":
+                    char = " "
                 row += char
         print("|" + row + "|")
     print("=" * 18)
@@ -91,12 +92,12 @@ def display_grid(grid, tokens, mask=None):
 
 def load_initial_text(data_path, num_chars=1024):
     """Load initial text from data file"""
-    with open(data_path, 'r', encoding='utf-8') as f:
+    with open(data_path, "r", encoding="utf-8") as f:
         text = f.read()[:num_chars]
 
     # Pad if necessary
     if len(text) < num_chars:
-        text = text + ' ' * (num_chars - len(text))
+        text = text + " " * (num_chars - len(text))
 
     # Convert to tokens
     tokens = torch.tensor([min(ord(c), 127) for c in text], dtype=torch.long)
@@ -126,8 +127,10 @@ def generate_with_game_of_life(
 
     print(f"Pre-calculating {num_iterations} iterations with Game of Life dynamics...")
 
-    # Convert to 32x32 grid
-    grid = (tokens % 2).reshape(32, 32)
+    # Convert to 32x32 grid with randomization for different initial patterns each time
+    # Add random noise to tokens before computing binary grid
+    random_offset = torch.randint(0, 256, (1024,), device=device)
+    grid = ((tokens + random_offset) % 2).reshape(32, 32)
 
     # Pre-calculate all frames
     all_frames = []
@@ -162,7 +165,9 @@ def generate_with_game_of_life(
             # Only process if there are masked positions in this chunk
             if chunk_mask.any():
                 # Get chunk tokens
-                x = updated_tokens[start_idx:end_idx].clone().unsqueeze(0)  # Shape: (1, 256)
+                x = (
+                    updated_tokens[start_idx:end_idx].clone().unsqueeze(0)
+                )  # Shape: (1, 256)
 
                 # Denoise, but only update masked positions (alive cells)
                 with torch.no_grad():
@@ -201,15 +206,24 @@ def generate_with_game_of_life(
     fig, ax = plt.subplots(figsize=(10, 10))
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.axis('off')
+    ax.axis("off")
 
     # Create a SINGLE text object for all 32 rows (centered)
     # This ensures zero gap between lines
-    text_obj = ax.text(0.5, 0.5, '', ha='center', va='center',
-                     fontsize=10, family='monospace',
-                     fontweight='normal', linespacing=1.0)
+    text_obj = ax.text(
+        0.5,
+        0.5,
+        "",
+        ha="center",
+        va="center",
+        fontsize=10,
+        family="monospace",
+        fontweight="normal",
+        linespacing=1.0,
+        stretch="expanded",
+    )
 
-    title = fig.suptitle('Initial state - Masked cells: 0/1024', fontsize=14)
+    title = fig.suptitle("Initial state - Masked cells: 0/1024", fontsize=14)
 
     def init():
         """Initialize animation"""
@@ -224,18 +238,18 @@ def generate_with_game_of_life(
             for col_idx in range(32):
                 idx = row_idx * 32 + col_idx
                 if mask[idx]:
-                    row_text += '█'
+                    row_text += "■"
                 else:
                     char = chr(min(int(frame_tokens[idx]), 127))
-                    if char == '\n':
-                        char = ' '
+                    if char == "\n":
+                        char = " "
                     row_text += char
             lines.append(row_text)
 
-        text_obj.set_text('\n'.join(lines))
-        text_obj.set_color('black')
+        text_obj.set_text("\n".join(lines))
+        text_obj.set_color("black")
 
-        title.set_text(f'Initial state - Masked cells: {mask.sum().item()}/1024')
+        title.set_text(f"Initial state - Masked cells: {mask.sum().item()}/1024")
         return [text_obj, title]
 
     def update(frame_idx):
@@ -253,24 +267,33 @@ def generate_with_game_of_life(
             for col_idx in range(32):
                 idx = row_idx * 32 + col_idx
                 if mask[idx]:
-                    row_text += '█'
+                    row_text += "■"
                 else:
                     char = chr(min(int(frame_tokens[idx]), 127))
-                    if char == '\n':
-                        char = ' '
+                    if char == "\n":
+                        char = " "
                     row_text += char
             lines.append(row_text)
 
-        text_obj.set_text('\n'.join(lines))
-        text_obj.set_color('black')
+        text_obj.set_text("\n".join(lines))
+        text_obj.set_color("black")
 
-        title.set_text(f'Iteration {frame_idx} - Masked cells: {mask.sum().item()}/1024')
+        title.set_text(
+            f"Iteration {frame_idx} - Masked cells: {mask.sum().item()}/1024"
+        )
 
         return [text_obj, title]
 
     # Create animation (faster, with looping)
-    anim = FuncAnimation(fig, update, init_func=init, frames=len(all_frames),
-                        interval=50, blit=False, repeat=True)
+    anim = FuncAnimation(
+        fig,
+        update,
+        init_func=init,
+        frames=len(all_frames),
+        interval=50,
+        blit=False,
+        repeat=True,
+    )
 
     plt.tight_layout()
     plt.show()
