@@ -214,12 +214,21 @@ class DiffusionTransformer(nn.Module):
         return logits
 
     @torch.inference_mode()
-    def sample(self, batch_size, seq_len, num_steps=None, temperature=1.0, device=None):
+    def sample(
+        self,
+        batch_size,
+        seq_len,
+        mask_schedule,
+        num_steps=None,
+        temperature=1.0,
+        device=None,
+    ):
         """
         Generate samples using masked diffusion process
         Args:
             batch_size: Number of samples to generate
             seq_len: Length of sequences to generate
+            mask_schedule: MaskedDiffusionSchedule instance
             num_steps: Number of denoising steps (defaults to diffusion_steps)
             temperature: Sampling temperature
             device: Device to generate on
@@ -241,24 +250,18 @@ class DiffusionTransformer(nn.Module):
 
         # Denoise step by step
         for t in reversed(range(num_steps)):
+            # Apply masking for this timestep
             t_batch = torch.full((batch_size,), t, device=device, dtype=torch.long)
-            logits = self.forward(x, t_batch)
+            x_masked = mask_schedule.add_masks(x, t_batch)
 
-            if t > 0:
-                # Sample from predicted distribution
-                probs = F.softmax(logits / temperature, dim=-1)
-                x_new = torch.multinomial(
-                    probs.view(-1, self.config.vocab_size), num_samples=1
-                ).view(batch_size, seq_len)
+            # Predict clean tokens given masked input
+            logits = self.forward(x_masked, t_batch)
 
-                # Only update masked positions
-                mask = x == self.config.mask_token_id
-                x = torch.where(mask, x_new, x)
-            else:
-                # Final step: take argmax for any remaining masks
-                x_new = torch.argmax(logits, dim=-1)
-                mask = x == self.config.mask_token_id
-                x = torch.where(mask, x_new, x)
+            # Sample from predicted distribution
+            probs = F.softmax(logits / temperature, dim=-1)
+            x = torch.multinomial(
+                probs.view(-1, self.config.vocab_size), num_samples=1
+            ).view(batch_size, seq_len)
 
         return x
 

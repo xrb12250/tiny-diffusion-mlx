@@ -19,7 +19,7 @@ class MaskedDiffusionSchedule:
         self.mask_token_id = mask_token_id
 
         # Linear schedule: probability of masking increases linearly
-        self.mask_probs = torch.linspace(0.0, 0.95, num_timesteps)
+        self.mask_probs = torch.linspace(1.0 / num_timesteps, 1.0, num_timesteps)
 
     def add_masks(self, x_0, t):
         """
@@ -43,6 +43,10 @@ class MaskedDiffusionSchedule:
         x_t = torch.where(mask, self.mask_token_id, x_0)
 
         return x_t
+
+    def get_mask_prob(self, t):
+        """Get the masking probability for timestep t"""
+        return self.mask_probs[t].item()
 
 
 def get_data_loader(data_path, batch_size, seq_len, device):
@@ -94,7 +98,7 @@ def train_step(model, x_0, mask_schedule, optimizer):
     t = torch.randint(0, mask_schedule.num_timesteps, (B,), device=device)
 
     # Add mask to get x_t
-    x_t = mask_schedule.add_mask(x_0, t)
+    x_t = mask_schedule.add_masks(x_0, t)
 
     # Forward pass: predict the original tokens
     logits = model(x_t, t)  # (B, T, vocab_size)
@@ -143,6 +147,7 @@ def train(
                 samples = model.sample(
                     batch_size=1,
                     seq_len=100,
+                    mask_schedule=mask_schedule,
                     num_steps=None,  # Use all timesteps
                     temperature=1.0,
                     device=model.get_device(),
@@ -192,7 +197,7 @@ def main():
 
     # Data loader
     data_loader = get_data_loader(
-        data_path="data/shakespeare.txt",
+        data_path="data/tiny_shakespeare.txt",
         batch_size=batch_size,
         seq_len=config.sequence_len,
         device=device,

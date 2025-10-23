@@ -4,6 +4,7 @@ Sample/inference script for the trained diffusion model
 
 import torch
 from model import DiffusionTransformer, DiffusionConfig, decode_tokens
+from training import MaskedDiffusionSchedule
 
 
 def load_model(checkpoint_path, device):
@@ -22,6 +23,12 @@ def generate_samples(model, num_samples=5, seq_len=256, num_steps=16, temperatur
     """Generate text samples from the model"""
     device = model.get_device()
 
+    # Create mask schedule
+    mask_schedule = MaskedDiffusionSchedule(
+        num_timesteps=model.config.diffusion_steps,
+        mask_token_id=model.config.mask_token_id
+    )
+
     print(f"Generating {num_samples} samples with {num_steps} denoising steps...\n")
 
     for i in range(num_samples):
@@ -30,6 +37,7 @@ def generate_samples(model, num_samples=5, seq_len=256, num_steps=16, temperatur
             tokens = model.sample(
                 batch_size=1,
                 seq_len=seq_len,
+                mask_schedule=mask_schedule,
                 num_steps=num_steps,
                 temperature=temperature,
                 device=device,
@@ -60,6 +68,12 @@ def generate_continuous_blocks(
     """
     device = model.get_device()
 
+    # Create mask schedule
+    mask_schedule = MaskedDiffusionSchedule(
+        num_timesteps=model.config.diffusion_steps,
+        mask_token_id=model.config.mask_token_id
+    )
+
     print(
         f"Generating {num_blocks} continuous blocks with {num_steps} denoising steps..."
     )
@@ -76,6 +90,7 @@ def generate_continuous_blocks(
                 tokens = model.sample(
                     batch_size=1,
                     seq_len=seq_len,
+                    mask_schedule=mask_schedule,
                     num_steps=num_steps,
                     temperature=temperature,
                     device=device,

@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from model import DiffusionTransformer, DiffusionConfig, encode_text, decode_tokens
+from training import MaskedDiffusionSchedule
 
 
 def load_model(checkpoint_path, device):
@@ -309,9 +310,9 @@ def main():
     model = load_model(checkpoint_path, device)
     print("Model loaded!\n")
 
-    # Load initial text (first 1024 characters from data/shakespeare.txt)
-    print("Loading initial text from data/shakespeare.txt...")
-    initial_tokens = load_initial_text("data/shakespeare.txt", num_chars=1024)
+    # Load initial text
+    print("Loading initial text from data/tiny_shakespeare.txt...")
+    initial_tokens = load_initial_text("data/tiny_shakespeare.txt", num_chars=1024)
     print(f"Loaded {len(initial_tokens)} characters\n")
 
     # Generate with Game of Life dynamics
