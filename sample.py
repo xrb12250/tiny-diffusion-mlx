@@ -27,6 +27,7 @@ def generate_samples(model, num_samples=5, temperature=1.0):
     mask_schedule = MaskedDiffusionSchedule(
         num_timesteps=model.config.diffusion_steps,
         mask_token_id=model.config.mask_token_id,
+        context_len=model.config.context_len,
     )
 
     print(f"Generating {num_samples} samples with {model.config.diffusion_steps} denoising steps...\n")
@@ -52,7 +53,7 @@ def generate_samples(model, num_samples=5, temperature=1.0):
 
 
 def generate_continuous_blocks(
-    model, num_blocks=30, temperature=1.0, context_len=64
+    model, num_blocks=30, temperature=1.0
 ):
     """
     Generate multiple blocks sequentially, where each block is conditioned on the
@@ -62,14 +63,15 @@ def generate_continuous_blocks(
         model: The trained diffusion model
         num_blocks: Number of blocks to generate
         temperature: Sampling temperature
-        context_len: Number of characters from previous block to condition on
     """
     device = model.get_device()
+    context_len = model.config.context_len
 
     # Create mask schedule
     mask_schedule = MaskedDiffusionSchedule(
         num_timesteps=model.config.diffusion_steps,
         mask_token_id=model.config.mask_token_id,
+        context_len=model.config.context_len,
     )
 
     print(
@@ -167,13 +169,21 @@ def main():
     model = load_model(checkpoint_path, device)
     print("Model loaded!\n")
 
-    # Generate continuous blocks
-    generate_continuous_blocks(
-        model,
-        num_blocks=30,
-        temperature=1.0,
-        context_len=64,
-    )
+    # Choose generation mode based on context_len
+    if model.config.context_len > 0:
+        print(f"Using continuous block generation (context_len={model.config.context_len})\n")
+        generate_continuous_blocks(
+            model,
+            num_blocks=30,
+            temperature=1.0,
+        )
+    else:
+        print("Using independent sample generation (no context)\n")
+        generate_samples(
+            model,
+            num_samples=5,
+            temperature=1.0,
+        )
 
 
 if __name__ == "__main__":

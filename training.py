@@ -14,9 +14,10 @@ class MaskedDiffusionSchedule:
     At each timestep, we have a probability of masking a token with [MASK].
     """
 
-    def __init__(self, num_timesteps, mask_token_id):
+    def __init__(self, num_timesteps, mask_token_id, context_len=0):
         self.num_timesteps = num_timesteps
         self.mask_token_id = mask_token_id
+        self.context_len = context_len
 
         # Linear schedule: probability of masking increases linearly
         self.mask_probs = torch.linspace(1.0 / num_timesteps, 1.0, num_timesteps)
@@ -38,6 +39,10 @@ class MaskedDiffusionSchedule:
 
         # Create mask: which tokens to replace with [MASK]
         mask = torch.rand(B, T, device=device) < mask_prob.unsqueeze(1)  # (B, T)
+
+        # Never mask the first context_len tokens
+        if self.context_len > 0:
+            mask[:, :self.context_len] = False
 
         # Replace masked positions with mask token
         x_t = torch.where(mask, self.mask_token_id, x_0)
@@ -187,7 +192,9 @@ def main():
 
     # Masked diffusion schedule
     mask_schedule = MaskedDiffusionSchedule(
-        num_timesteps=config.diffusion_steps, mask_token_id=config.mask_token_id
+        num_timesteps=config.diffusion_steps,
+        mask_token_id=config.mask_token_id,
+        context_len=config.context_len,
     )
 
     # Optimizer

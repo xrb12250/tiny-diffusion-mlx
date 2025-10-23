@@ -30,6 +30,7 @@ class DiffusionConfig:
     n_head: int = 6
     n_embd: int = 384
     diffusion_steps: int = 128
+    context_len: int = 64  # Number of prefix tokens that are never masked
 
     @property
     def total_vocab_size(self):
