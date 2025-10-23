@@ -303,14 +303,14 @@ def main():
     print(f"Using device: {device}\n")
 
     # Load model
-    checkpoint_path = "diffusion_model.pt"
+    checkpoint_path = "weights/diffusion_model.pt"
     print(f"Loading model from {checkpoint_path}...")
     model = load_model(checkpoint_path, device)
     print("Model loaded!\n")
 
-    # Load initial text (first 1024 characters from data.txt)
-    print("Loading initial text from data.txt...")
-    initial_tokens = load_initial_text("data.txt", num_chars=1024)
+    # Load initial text (first 1024 characters from data/shakespeare.txt)
+    print("Loading initial text from data/shakespeare.txt...")
+    initial_tokens = load_initial_text("data/shakespeare.txt", num_chars=1024)
     print(f"Loaded {len(initial_tokens)} characters\n")
 
     # Generate with Game of Life dynamics

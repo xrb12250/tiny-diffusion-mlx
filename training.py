@@ -195,7 +195,7 @@ def main():
 
     # Data loader
     data_loader = get_data_loader(
-        data_path="data.txt",  # You'll need to provide this
+        data_path="data/shakespeare.txt",
         batch_size=batch_size,
         seq_len=config.sequence_len,
         device=device,
@@ -213,8 +213,10 @@ def main():
     )
 
     # Save model
-    torch.save(model.state_dict(), "diffusion_model.pt")
-    print("Model saved to diffusion_model.pt")
+    import os
+    os.makedirs("weights", exist_ok=True)
+    torch.save(model.state_dict(), "weights/diffusion_model.pt")
+    print("Model saved to weights/diffusion_model.pt")
 
 
 if __name__ == "__main__":

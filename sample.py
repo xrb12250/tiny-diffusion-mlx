@@ -9,7 +9,7 @@ from model import DiffusionTransformer, DiffusionConfig
 def load_model(checkpoint_path, device):
     """Load a trained model from checkpoint"""
     # Create model with same config as training
-    config = DiffusionConfig()  # default config
+    config = DiffusionConfig()
 
     model = DiffusionTransformer(config).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
@@ -44,7 +44,7 @@ def generate_samples(model, num_samples=5, seq_len=256, num_steps=16, temperatur
 
 
 def generate_continuous_blocks(
-    model, num_blocks=100, seq_len=256, num_steps=16, temperature=1.0, context_len=32
+    model, num_blocks=30, seq_len=256, num_steps=32, temperature=1.0, context_len=64
 ):
     """
     Generate multiple blocks sequentially, where each block is conditioned on the
@@ -146,7 +146,7 @@ def main():
     print(f"Using device: {device}\n")
 
     # Load model
-    checkpoint_path = "diffusion_model.pt"
+    checkpoint_path = "weights/diffusion_model.pt"
     print(f"Loading model from {checkpoint_path}...")
     model = load_model(checkpoint_path, device)
     print("Model loaded!\n")
@@ -155,8 +155,8 @@ def main():
     generate_continuous_blocks(
         model,
         num_blocks=30,
-        seq_len=256,
-        num_steps=32,
+        seq_len=model.config.sequence_len,
+        num_steps=model.config.diffusion_steps,
         temperature=1.0,
         context_len=64,
     )

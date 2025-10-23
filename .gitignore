@@ -1,2 +1,4 @@
 __pycache__/
 diffusion_model*
+data/
+weights/
