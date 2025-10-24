@@ -3,6 +3,10 @@ Sample from diffusion model using Conway's Game of Life rules for masking
 Displays 256 tokens as a 16x16 grid and applies Game of Life dynamics
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
