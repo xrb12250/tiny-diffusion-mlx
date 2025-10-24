@@ -37,6 +37,19 @@ class DiffusionConfig:
         """Total vocabulary size (128 tokens including mask at 0)"""
         return self.vocab_size
 
+    def __str__(self):
+        return (
+            f"Training Configuration:\n"
+            f"  sequence_len: {self.sequence_len}\n"
+            f"  vocab_size: {self.vocab_size}\n"
+            f"  mask_token_id: {self.mask_token_id}\n"
+            f"  n_layer: {self.n_layer}\n"
+            f"  n_head: {self.n_head}\n"
+            f"  n_embd: {self.n_embd}\n"
+            f"  diffusion_steps: {self.diffusion_steps}\n"
+            f"  context_len: {self.context_len}\n"
+        )
+
 
 def norm(x):
     # Purely functional rmsnorm with no learnable params

@@ -173,6 +173,7 @@ def main():
     learning_rate = 3e-4
 
     config = DiffusionConfig()  # default config
+    print(config)
 
     # Device
     if torch.cuda.is_available():
