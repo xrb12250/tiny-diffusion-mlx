@@ -110,53 +110,22 @@ def generate_continuous_blocks(
 
     for block_idx in range(num_blocks):
         with torch.no_grad():
-            if block_idx == 0:
-                # First block: generate from scratch
-                tokens = model.sample(
-                    batch_size=1,
-                    seq_len=model.config.sequence_len,
-                    mask_schedule=mask_schedule,
-                    num_steps=None,
-                    temperature=temperature,
-                    device=device,
-                )
-            else:
-                # Subsequent blocks: condition on last context_len tokens
-                # Start from all mask tokens
-                x = torch.full(
-                    (1, model.config.sequence_len),
-                    model.config.mask_token_id,
-                    dtype=torch.long,
-                    device=device,
-                )
+            # Get context tokens for this block
+            context_tokens = None
+            if block_idx > 0:
+                # Use last context_len tokens from previous block
+                context_tokens = prev_context.unsqueeze(0)
 
-                # Set the first context_len tokens to the last context_len tokens of previous block
-                # These will never be masked during denoising
-                x[0, :context_len] = prev_context
-
-                # Create a mask that protects the first context_len tokens
-                # Denoise step by step, but keep context fixed
-                for t in reversed(range(model.config.diffusion_steps)):
-                    t_batch = torch.full((1,), t, device=device, dtype=torch.long)
-                    logits = model.forward(x, t_batch)
-
-                    if t > 0:
-                        # Sample from predicted distribution
-                        probs = torch.nn.functional.softmax(
-                            logits / temperature, dim=-1
-                        )
-                        x_new = torch.multinomial(
-                            probs.view(-1, model.config.vocab_size), num_samples=1
-                        ).view(1, model.config.sequence_len)
-
-                        # Keep the context fixed, only update the rest
-                        x[:, context_len:] = x_new[:, context_len:]
-                    else:
-                        # Final step: take argmax
-                        x_new = torch.argmax(logits, dim=-1)
-                        x[:, context_len:] = x_new[:, context_len:]
-
-                tokens = x
+            # Generate block
+            tokens = model.sample(
+                batch_size=1,
+                seq_len=model.config.sequence_len,
+                mask_schedule=mask_schedule,
+                num_steps=None,
+                temperature=temperature,
+                device=device,
+                context_tokens=context_tokens,
+            )
 
             # Store the last context_len tokens for next iteration
             prev_context = tokens[0, -context_len:]

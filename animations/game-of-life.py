@@ -118,6 +118,13 @@ def generate_with_game_of_life(
     seq_len = model.config.sequence_len
     num_steps = model.config.diffusion_steps
 
+    # Create mask schedule
+    mask_schedule = MaskedDiffusionSchedule(
+        num_timesteps=model.config.diffusion_steps,
+        mask_token_id=model.config.mask_token_id,
+        context_len=model.config.context_len,
+    )
+
     print(f"Pre-calculating {num_iterations} iterations with Game of Life dynamics...")
 
     # Convert to 32x32 grid with randomization for different initial patterns each time
@@ -168,21 +175,22 @@ def generate_with_game_of_life(
                 with torch.no_grad():
                     for t in reversed(range(num_steps)):
                         t_batch = torch.full((1,), t, device=device, dtype=torch.long)
-                        logits = model.forward(x, t_batch)
 
-                        if t > 0:
-                            # Sample from predicted distribution
-                            probs = F.softmax(logits / temperature, dim=-1)
-                            x_new = torch.multinomial(
-                                probs.view(-1, model.config.vocab_size), num_samples=1
-                            ).view(1, seq_len)
+                        # Apply masking for this timestep
+                        x_masked = mask_schedule.add_masks(x, t_batch)
 
-                            # Only update masked positions (alive cells)
-                            x[0, chunk_mask] = x_new[0, chunk_mask]
-                        else:
-                            # Final step: take argmax
-                            x_new = torch.argmax(logits, dim=-1)
-                            x[0, chunk_mask] = x_new[0, chunk_mask]
+                        # Predict clean tokens
+                        logits = model.forward(x_masked, t_batch)
+
+                        # Sample from predicted distribution
+                        probs = F.softmax(logits / temperature, dim=-1)
+                        x_new = torch.multinomial(
+                            probs.view(-1, model.config.vocab_size), num_samples=1
+                        ).view(1, seq_len)
+
+                        # Only update positions that were masked
+                        mask = x_masked == model.config.mask_token_id
+                        x[0] = torch.where(mask[0], x_new[0], x[0])
 
                 # Update the chunk in the full token array
                 updated_tokens[start_idx:end_idx] = x[0]

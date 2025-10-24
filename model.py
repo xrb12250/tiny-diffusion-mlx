@@ -267,9 +267,13 @@ class DiffusionTransformer(nn.Module):
 
             # Sample from predicted distribution
             probs = F.softmax(logits / temperature, dim=-1)
-            x = torch.multinomial(
+            x_new = torch.multinomial(
                 probs.view(-1, self.config.vocab_size), num_samples=1
             ).view(batch_size, seq_len)
+
+            # Only update positions that were masked
+            mask = x_masked == self.config.mask_token_id
+            x = torch.where(mask, x_new, x)
 
         return x
 
