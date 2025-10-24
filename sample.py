@@ -3,8 +3,13 @@ Sample/inference script for the trained diffusion model
 """
 
 import torch
-from model import DiffusionTransformer, DiffusionConfig, decode_tokens, encode_text
-from training import MaskedDiffusionSchedule
+from model import (
+    DiffusionTransformer,
+    DiffusionConfig,
+    decode_tokens,
+    encode_text,
+    MaskedDiffusionSchedule,
+)
 
 
 def load_dataset_text(data_path="data/tiny_shakespeare.txt"):

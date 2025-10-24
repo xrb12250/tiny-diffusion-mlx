@@ -7,8 +7,13 @@ import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from model import DiffusionTransformer, DiffusionConfig, encode_text, decode_tokens
-from training import MaskedDiffusionSchedule
+from model import (
+    DiffusionTransformer,
+    DiffusionConfig,
+    encode_text,
+    decode_tokens,
+    MaskedDiffusionSchedule,
+)
 
 
 def load_model(checkpoint_path, device):
