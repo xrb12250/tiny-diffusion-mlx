@@ -3,8 +3,25 @@ Sample/inference script for the trained diffusion model
 """
 
 import torch
-from model import DiffusionTransformer, DiffusionConfig, decode_tokens
+from model import DiffusionTransformer, DiffusionConfig, decode_tokens, encode_text
 from training import MaskedDiffusionSchedule
+
+
+def load_dataset_text(data_path="data/tiny_shakespeare.txt"):
+    """Load dataset text for random context sampling"""
+    with open(data_path, "r", encoding="utf-8") as f:
+        text = f.read()
+    return encode_text(text)
+
+
+def get_random_context(dataset_tokens, context_len, batch_size=1):
+    """Get random context tokens from dataset"""
+    max_start = len(dataset_tokens) - context_len
+    start_indices = torch.randint(0, max_start, (batch_size,))
+    context_tokens = torch.stack(
+        [dataset_tokens[start : start + context_len] for start in start_indices]
+    )
+    return context_tokens
 
 
 def load_model(checkpoint_path, device):
@@ -19,7 +36,7 @@ def load_model(checkpoint_path, device):
     return model
 
 
-def generate_samples(model, num_samples=5, temperature=1.0):
+def generate_samples(model, num_samples=5, temperature=1.0, dataset_tokens=None):
     """Generate text samples from the model"""
     device = model.get_device()
 
@@ -34,6 +51,13 @@ def generate_samples(model, num_samples=5, temperature=1.0):
 
     for i in range(num_samples):
         with torch.no_grad():
+            # Get random context if context_len > 0
+            context_tokens = None
+            if model.config.context_len > 0 and dataset_tokens is not None:
+                context_tokens = get_random_context(
+                    dataset_tokens, model.config.context_len, batch_size=1
+                )
+
             # Generate a sample
             tokens = model.sample(
                 batch_size=1,
@@ -42,6 +66,7 @@ def generate_samples(model, num_samples=5, temperature=1.0):
                 num_steps=None,
                 temperature=temperature,
                 device=device,
+                context_tokens=context_tokens,
             )
 
             # Decode tokens to text
@@ -169,6 +194,13 @@ def main():
     model = load_model(checkpoint_path, device)
     print("Model loaded!\n")
 
+    # Load dataset for random context sampling
+    dataset_tokens = None
+    if model.config.context_len > 0:
+        print("Loading dataset for context sampling...")
+        dataset_tokens = load_dataset_text("data/tiny_shakespeare.txt")
+        print(f"Loaded {len(dataset_tokens)} tokens from dataset\n")
+
     # Choose generation mode based on context_len
     if model.config.context_len > 0:
         print(f"Using continuous block generation (context_len={model.config.context_len})\n")
@@ -183,6 +215,7 @@ def main():
             model,
             num_samples=5,
             temperature=1.0,
+            dataset_tokens=dataset_tokens,
         )
 
 

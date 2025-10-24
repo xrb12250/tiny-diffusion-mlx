@@ -223,6 +223,7 @@ class DiffusionTransformer(nn.Module):
         num_steps=None,
         temperature=1.0,
         device=None,
+        context_tokens=None,
     ):
         """
         Generate samples using masked diffusion process
@@ -233,6 +234,7 @@ class DiffusionTransformer(nn.Module):
             num_steps: Number of denoising steps (defaults to diffusion_steps)
             temperature: Sampling temperature
             device: Device to generate on
+            context_tokens: Optional context tokens for conditioning, shape (batch_size, context_len)
         Returns:
             samples: Generated token sequences, shape (batch_size, seq_len)
         """
@@ -248,6 +250,11 @@ class DiffusionTransformer(nn.Module):
             dtype=torch.long,
             device=device,
         )
+
+        # If context tokens provided, set them in the first context_len positions
+        if context_tokens is not None:
+            context_len = context_tokens.size(1)
+            x[:, :context_len] = context_tokens.to(device)
 
         # Denoise step by step
         for t in reversed(range(num_steps)):
