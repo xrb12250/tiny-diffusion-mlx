@@ -5,7 +5,8 @@ Displays 256 tokens as a 16x16 grid and applies Game of Life dynamics
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import torch
 import torch.nn.functional as F
@@ -334,7 +335,7 @@ def main():
     generate_with_game_of_life(
         model,
         initial_tokens,
-        num_iterations=100,
+        num_iterations=10,
         temperature=1.0,
     )
 

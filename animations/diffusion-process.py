@@ -290,8 +290,8 @@ def main():
     # Generate with visualization
     generate_with_visualization(
         model,
-        num_blocks=10,
-        temperature=1.0,
+        num_blocks=6,
+        temperature=0.1,
         dataset_tokens=dataset_tokens,
     )
 
