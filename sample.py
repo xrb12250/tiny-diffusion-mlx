@@ -78,7 +78,7 @@ def generate_samples(model, num_samples=5, temperature=1.0, dataset_tokens=None)
 
 
 def generate_continuous_blocks(
-    model, num_blocks=30, temperature=1.0
+    model, num_blocks=30, temperature=1.0, dataset_tokens=None
 ):
     """
     Generate multiple blocks sequentially, where each block is conditioned on the
@@ -112,8 +112,11 @@ def generate_continuous_blocks(
         with torch.no_grad():
             # Get context tokens for this block
             context_tokens = None
-            if block_idx > 0:
-                # Use last context_len tokens from previous block
+            if block_idx == 0 and dataset_tokens is not None:
+                # First block: use random context from dataset
+                context_tokens = get_random_context(dataset_tokens, context_len, batch_size=1)
+            elif block_idx > 0:
+                # Subsequent blocks: use last context_len tokens from previous block
                 context_tokens = prev_context.unsqueeze(0)
 
             # Generate block
@@ -177,6 +180,7 @@ def main():
             model,
             num_blocks=30,
             temperature=1.0,
+            dataset_tokens=dataset_tokens,
         )
     else:
         print("Using independent sample generation (no context)\n")

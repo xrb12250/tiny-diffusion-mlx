@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 from model import DiffusionTransformer, DiffusionConfig, encode_text, decode_tokens
+from sample import get_random_context
 
 
 class MaskedDiffusionSchedule:
@@ -130,6 +131,7 @@ def train(
     optimizer,
     num_steps=10000,
     sample_interval=500,
+    dataset_tokens=None,
 ):
     """
     Main training loop
@@ -151,6 +153,11 @@ def train(
         if (step + 1) % sample_interval == 0:
             model.eval()
             with torch.no_grad():
+                # Get random context if context_len > 0
+                context_tokens = None
+                if model.config.context_len > 0 and dataset_tokens is not None:
+                    context_tokens = get_random_context(dataset_tokens, model.config.context_len, batch_size=1)
+
                 samples = model.sample(
                     batch_size=1,
                     seq_len=model.config.sequence_len,
@@ -158,6 +165,7 @@ def train(
                     num_steps=None,  # Use all timesteps
                     temperature=1.0,
                     device=model.get_device(),
+                    context_tokens=context_tokens,
                 )
                 # Decode samples to text
                 text = decode_tokens(samples[0])
@@ -206,12 +214,20 @@ def main():
     )
 
     # Data loader
+    data_path = "data/tiny_shakespeare.txt"
     data_loader = get_data_loader(
-        data_path="data/tiny_shakespeare.txt",
+        data_path=data_path,
         batch_size=batch_size,
         seq_len=config.sequence_len,
         device=device,
     )
+
+    # Load dataset tokens for context sampling
+    dataset_tokens = None
+    if config.context_len > 0:
+        with open(data_path, "r", encoding="utf-8") as f:
+            text = f.read()
+        dataset_tokens = encode_text(text)
 
     # Train
     print("Starting training...\n")
@@ -222,6 +238,7 @@ def main():
         optimizer=optimizer,
         num_steps=max_iters,
         sample_interval=eval_interval,
+        dataset_tokens=dataset_tokens,
     )
 
     # Save model
