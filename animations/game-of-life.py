@@ -164,20 +164,19 @@ def generate_with_game_of_life(
 
             # Only process if there are masked positions in this chunk
             if chunk_mask.any():
-                # Get chunk tokens and mask alive cells
+                # Get chunk tokens
                 x = (
                     updated_tokens[start_idx:end_idx].clone().unsqueeze(0)
                 )  # Shape: (1, 256)
-                # Replace alive cells with mask token
-                x[0, chunk_mask] = model.config.mask_token_id
 
-                # Denoise the masked positions (alive cells)
+                # Denoise only the alive cells (chunk_mask positions)
                 with torch.no_grad():
                     for t in reversed(range(num_steps)):
                         t_batch = torch.full((1,), t, device=device, dtype=torch.long)
 
-                        # Apply masking for this timestep
-                        x_masked = mask_schedule.add_masks(x, t_batch)
+                        # Create x_masked: mask token at alive cells, original elsewhere
+                        x_masked = x.clone()
+                        x_masked[0, chunk_mask] = model.config.mask_token_id
 
                         # Predict clean tokens
                         logits = model.forward(x_masked, t_batch)
@@ -188,9 +187,8 @@ def generate_with_game_of_life(
                             probs.view(-1, model.config.vocab_size), num_samples=1
                         ).view(1, seq_len)
 
-                        # Only update positions that were masked
-                        mask = x_masked == model.config.mask_token_id
-                        x[0] = torch.where(mask[0], x_new[0], x[0])
+                        # Only update the alive cell positions
+                        x[0, chunk_mask] = x_new[0, chunk_mask]
 
                 # Update the chunk in the full token array
                 updated_tokens[start_idx:end_idx] = x[0]

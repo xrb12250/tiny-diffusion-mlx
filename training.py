@@ -108,10 +108,12 @@ def train_step(model, x_0, mask_schedule, optimizer):
     # Forward pass: predict the original tokens
     logits = model(x_t, t)  # (B, T, vocab_size)
 
-    # Compute loss: cross-entropy between predicted and original tokens
+    # Compute loss only on masked positions
+    mask = x_t == mask_schedule.mask_token_id  # (B, T)
     loss = F.cross_entropy(
-        logits.view(-1, logits.size(-1)), x_0.view(-1), reduction="mean"
+        logits.view(-1, logits.size(-1)), x_0.view(-1), reduction="none"
     )
+    loss = (loss.view(B, -1) * mask).sum() / mask.sum()  # Average over masked positions only
 
     # Backward pass
     optimizer.zero_grad()
