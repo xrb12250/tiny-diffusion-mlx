@@ -74,7 +74,9 @@ def train_step(model, x_0, mask_schedule, optimizer):
     loss = F.cross_entropy(
         logits.view(-1, logits.size(-1)), x_0.view(-1), reduction="none"
     )
-    loss = (loss.view(B, -1) * mask).sum() / mask.sum()  # Average over masked positions only
+    loss = (
+        loss.view(B, -1) * mask
+    ).sum() / mask.sum()  # Average over masked positions only
 
     # Backward pass
     optimizer.zero_grad()
@@ -116,7 +118,9 @@ def train(
                 # Get random context if context_len > 0
                 context_tokens = None
                 if model.config.context_len > 0 and dataset_tokens is not None:
-                    context_tokens = get_random_context(dataset_tokens, model.config.context_len, batch_size=1)
+                    context_tokens = get_random_context(
+                        dataset_tokens, model.config.context_len, batch_size=1
+                    )
 
                 samples = model.sample(
                     batch_size=1,
@@ -143,7 +147,9 @@ def main():
     learning_rate = 3e-4
 
     config = DiffusionConfig()  # default config
-    print(config)
+    print(f"Sequence_len: {config.sequence_len}")
+    print(f"Diffusion_steps: {config.diffusion_steps}")
+    print(f"Context_len: {config.context_len}")
 
     # Device
     if torch.cuda.is_available():

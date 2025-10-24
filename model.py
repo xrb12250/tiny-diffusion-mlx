@@ -32,24 +32,6 @@ class DiffusionConfig:
     diffusion_steps: int = 128
     context_len: int = 64  # Number of prefix tokens that are never masked
 
-    @property
-    def total_vocab_size(self):
-        """Total vocabulary size (128 tokens including mask at 0)"""
-        return self.vocab_size
-
-    def __str__(self):
-        return (
-            f"Training Configuration:\n"
-            f"  sequence_len: {self.sequence_len}\n"
-            f"  vocab_size: {self.vocab_size}\n"
-            f"  mask_token_id: {self.mask_token_id}\n"
-            f"  n_layer: {self.n_layer}\n"
-            f"  n_head: {self.n_head}\n"
-            f"  n_embd: {self.n_embd}\n"
-            f"  diffusion_steps: {self.diffusion_steps}\n"
-            f"  context_len: {self.context_len}\n"
-        )
-
 
 def norm(x):
     # Purely functional rmsnorm with no learnable params
@@ -137,7 +119,7 @@ class DiffusionTransformer(nn.Module):
         self.config = config
 
         # Token and time embeddings (include mask token in vocab)
-        self.token_emb = nn.Embedding(config.total_vocab_size, config.n_embd)
+        self.token_emb = nn.Embedding(config.vocab_size, config.n_embd)
         self.time_emb = nn.Embedding(config.diffusion_steps, config.n_embd)
 
         # Transformer blocks
@@ -325,7 +307,7 @@ class MaskedDiffusionSchedule:
 
         # Never mask the first context_len tokens
         if self.context_len > 0:
-            mask[:, :self.context_len] = False
+            mask[:, : self.context_len] = False
 
         # Replace masked positions with mask token
         x_t = torch.where(mask, self.mask_token_id, x_0)
