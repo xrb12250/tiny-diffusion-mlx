@@ -14,7 +14,7 @@ The original PyTorch version of the project now lives in [`legacy/`](legacy/) to
 
 ```bash
 # Clone and enter the repository
-git clone <repository-url>
+git clone (https://github.com/xrb12250/tiny-diffusion-mlx/)
 cd tiny-diffusion-mlx
 
 # Install dependencies
@@ -77,5 +77,5 @@ tiny-diffusion-mlx/
 
 ## Legacy Code
 
-The previous PyTorch codebase—including its training, sampling and animation scripts, plus the original `.pt` weights—has been moved into [`legacy/`](legacy/). None of that code is imported by the MLX pipeline, so feel free to remove it entirely if you no longer need the historical implementation.
+The previous PyTorch codebase—including its training, sampling and animation scripts, plus the original `.pt` weights—has been moved into [`legacy/`](legacy/).
 
